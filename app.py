@@ -1,6 +1,7 @@
 import streamlit as st
 import joblib
 import numpy as np
+import xgboost as xgb
 
 st.set_page_config(page_title="Credit Card Fraud Detection", layout="centered")
 
@@ -29,18 +30,21 @@ threshold = st.slider(
 )
 
 if st.button("Predict Transaction"):
-    # Create dummy V1–V28 features (as in dataset)
     v_features = np.zeros(28)
-
-    # Combine input
     input_data = np.array([[time] + list(v_features) + [amount]])
 
-    # Scale Time & Amount together
+    # Scale only Amount (same as training)
     amount_scaled = scaler.transform([[amount]])
     input_data[:, -1] = amount_scaled[0][0]
 
-    # Prediction
-    prob = float(model.predict(input_data)[0])
+    try:
+        # Try sklearn-style prediction
+        prob = model.predict_proba(input_data)[0][1]
+    except:
+        # Fallback to Booster-style prediction
+        dmatrix = xgb.DMatrix(input_data)
+        prob = float(model.predict(dmatrix)[0])
+
     pred = 1 if prob > threshold else 0
 
     if pred == 1:
