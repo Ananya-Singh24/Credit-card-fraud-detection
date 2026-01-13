@@ -40,7 +40,7 @@ if st.button("Predict Transaction"):
     input_data[:, -1] = amount_scaled[0][0]
 
     # Prediction
-    prob = model.predict_proba(input_data)[0][1]
+    prob = float(model.predict(input_data)[0])
     pred = 1 if prob > threshold else 0
 
     if pred == 1:
