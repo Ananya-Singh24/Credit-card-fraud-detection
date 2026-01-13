@@ -36,10 +36,8 @@ if st.button("Predict Transaction"):
     input_data = np.array([[time] + list(v_features) + [amount]])
 
     # Scale Time & Amount together
-    time_amount = input_data[:, [0, -1]]
-    time_amount_scaled = scaler.transform(time_amount)
-    input_data[:, 0] = time_amount_scaled[:, 0]
-    input_data[:, -1] = time_amount_scaled[:, 1]
+    amount_scaled = scaler.transform([[amount]])
+    input_data[:, -1] = amount_scaled[0][0]
 
     # Prediction
     prob = model.predict_proba(input_data)[0][1]
