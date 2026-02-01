@@ -1,74 +1,108 @@
 import streamlit as st
-import joblib
 import numpy as np
-import xgboost as xgb
+import joblib
 
-# -------------------- PAGE SETUP --------------------
-st.set_page_config(page_title="Credit Card Fraud Detection", layout="centered")
-
-st.title("💳 Credit Card Fraud Detection")
-st.write("This demo predicts whether a transaction is fraudulent using an XGBoost model.")
-
-# -------------------- LOAD MODEL & SCALER --------------------
-@st.cache_resource
-def load_resources():
-    model = joblib.load("xgboost_fraud_model.pkl")
-    scaler = joblib.load("scaler.pkl")
-    return model, scaler
-
-model, scaler = load_resources()
-
-# -------------------- USER INPUT --------------------
-st.subheader("Enter Transaction Details")
-
-time = st.number_input("Transaction Time (seconds)", min_value=0.0)
-amount = st.number_input("Transaction Amount", min_value=0.0)
-
-threshold = st.slider(
-    "Fraud Detection Threshold",
-    min_value=0.0,
-    max_value=1.0,
-    value=0.3,
-    step=0.01
+# ---------------- Page Config ----------------
+st.set_page_config(
+    page_title="Credit Card Fraud Detection",
+    page_icon="💳",
+    layout="wide"
 )
 
-st.caption("⚠️ PCA-based features (V1–V28) are auto-generated for demo purposes.")
+# ---------------- Theme Toggle ----------------
+theme = st.sidebar.radio("🌗 Theme", ["Light", "Dark"])
 
-# -------------------- PREDICTION --------------------
-if st.button("Predict Transaction"):
+if theme == "Dark":
+    st.markdown(
+        """
+        <style>
+        body { background-color: #0E1117; color: white; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-    # Generate realistic PCA features
-    v_features = np.random.normal(0, 1, 28)
+# ---------------- Load Model & Scaler ----------------
+model = joblib.load("xgboost_fraud_model.pkl")
+scaler = joblib.load("scaler.pkl")   # scaler ONLY for Time & Amount
 
-    # Scale amount (same as training)
-    amount_scaled = scaler.transform([[amount]])[0][0]
+# ---------------- Title ----------------
+st.title("💳 Credit Card Fraud Detection System")
+st.subheader("European Card Transactions | XGBoost Model")
 
-    # Final input: [Time, V1–V28, Amount]
-    input_data = np.array([[time] + list(v_features) + [amount_scaled]])
+st.write(
+    "This application predicts whether a credit card transaction is **fraudulent or legitimate** "
+    "using a trained **XGBoost model** on real European card transaction data."
+)
 
-    # Predict fraud probability
-    try:
-        prob = model.predict_proba(input_data)[0][1]
-    except:
-        dmatrix = xgb.DMatrix(input_data)
-        prob = float(model.predict(dmatrix, output_margin=False)[0])
+# ---------------- Sidebar Inputs ----------------
+st.sidebar.header("🧾 Transaction Details")
 
-    # Classification
-    prediction = "Fraudulent" if prob > threshold else "Normal"
+time = st.sidebar.number_input("Transaction Time", min_value=0.0)
+amount = st.sidebar.number_input("Transaction Amount", min_value=0.0)
 
-    # -------------------- OUTPUT --------------------
-    st.subheader("Prediction Result")
+st.sidebar.markdown("### PCA Features (V1 – V28)")
 
-    if prediction == "Fraudulent":
+v_features = []
+for i in range(1, 29):
+    v = st.sidebar.number_input(f"V{i}", value=0.0)
+    v_features.append(v)
+
+# ---------------- Sample Transaction ----------------
+if st.sidebar.button("⚡ Use Sample Fraud Transaction"):
+    time = 45000
+    amount = 2500
+    v_features = [
+        -2.3, 1.9, -0.8, 0.6, -1.1, 0.4, -0.5,
+        -1.8, 0.2, -0.3, 1.2, -0.9, -0.4, 0.7,
+        -1.5, 0.1, -0.2, -0.6, 0.9, -0.7,
+        0.3, -1.0, -0.8, 0.5, -0.4, 0.6, -0.2, -1.3
+    ]
+
+# ---------------- Threshold ----------------
+st.sidebar.markdown("---")
+threshold = st.sidebar.slider(
+    "🎚 Fraud Threshold",
+    0.0, 1.0, 0.5, 0.01
+)
+
+# ---------------- Prediction ----------------
+if st.button("🔍 Check Transaction"):
+
+    # Scale ONLY Time & Amount
+    scaled_time_amount = scaler.transform([[time, amount]])
+
+    # Combine scaled + PCA features
+    final_input = np.concatenate(
+        [scaled_time_amount[0], np.array(v_features)]
+    ).reshape(1, -1)
+
+    # Predict probability
+    prob = model.predict_proba(final_input)[0][1]
+
+    # UI Output
+    st.metric("Fraud Probability", f"{prob:.2%}")
+    st.progress(prob)
+
+    if prob >= threshold:
         st.error("⚠️ Fraudulent Transaction Detected")
     else:
-        st.success("✅ Normal Transaction")
+        st.success("✅ Legitimate Transaction")
 
-    st.write(f"**Fraud Probability:** {prob:.4f}")
+# ---------------- Explainability ----------------
+with st.expander("ℹ️ How does this model work?"):
+    st.write(
+        """
+        - **Time & Amount** are scaled using the same scaler used during training.
+        - **V1–V28** are PCA-transformed features and are used directly.
+        - The XGBoost model outputs a **fraud probability**.
+        - You can adjust the **threshold** to control sensitivity.
+        
+        Lower threshold → catches more fraud  
+        Higher threshold → fewer false alarms
+        """
+    )
 
-    if prob < 0.1:
-        st.info("🟢 Low Risk")
-    elif prob < 0.5:
-        st.warning("🟡 Medium Risk")
-    else:
-        st.error("🔴 High Risk")
+# ---------------- Footer ----------------
+st.markdown("---")
+st.caption("🔐 Credit Card Fraud Detection | Kaggle European Dataset | XGBoost + Streamlit")
